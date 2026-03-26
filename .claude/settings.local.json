@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npx create-next-app@latest who-press-the-glyph --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(rm -rf who-press-the-glyph)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s \"https://api.opendota.com/api/proMatches?limit=1\")",
+      "Bash(curl -s \"https://api.opendota.com/api/matches/8744190953\")",
+      "Bash(python3 -c \":*)",
+      "Bash(curl -s \"https://api.opendota.com/api/proMatches?limit=5\")",
+      "Bash(curl -s \"https://api.opendota.com/api/matches/8744182837\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/SteamDatabase/GameTracking-Dota2/master/Protobufs/dota_shared_enums.proto\")",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/SteamDatabase/GameTracking-Dota2/master/Protobufs/dota_shared_enums.proto\")",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/SteamDatabase/GameTracking-Dota2/master/Protobufs/dota_commonmessages.proto\")",
+      "Bash(docker --version)",
+      "Bash(\"/c/Program Files/Docker/Docker/resources/bin/docker\" --version)",
+      "Bash(cmd.exe /c \"docker --version\")"
+    ]
+  }
+}
