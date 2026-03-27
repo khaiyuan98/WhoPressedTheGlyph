@@ -95,6 +95,8 @@ export async function GET(
         glyphEvents.push({
           time: Math.round(event.time ?? 0),
           playerSlot: event.player1 ?? event.playerid_1 ?? event.slot ?? -1,
+          isRadiant: null,
+          heroId: null,
         });
       }
     } catch {
