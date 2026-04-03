@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { MatchGlyphResult, HeroData, GlyphEvent } from "@/lib/types";
 import MatchInfo from "./MatchInfo";
 import TowerTimeline from "./TowerTimeline";
@@ -43,26 +43,33 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
     }
   }
 
-  async function handleLoadGlyphTimestamps() {
-    setLoadingReplay(true);
-    setReplayError(null);
-    try {
-      const res = await fetch(`/api/stratz/${match.matchId}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setReplayError(data.error || "Failed to fetch glyph timestamps");
-      } else {
-        setGlyphEvents(data.glyphEvents ?? []);
-        if ((data.glyphEvents ?? []).length === 0) {
-          setReplayError("No glyph events found for this match.");
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchGlyphTimestamps() {
+      setLoadingReplay(true);
+      setReplayError(null);
+      try {
+        const res = await fetch(`/api/stratz/${match.matchId}`);
+        if (cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setReplayError(data.error || "Failed to fetch glyph timestamps");
+        } else {
+          setGlyphEvents(data.glyphEvents ?? []);
+          if ((data.glyphEvents ?? []).length === 0) {
+            setReplayError("No glyph events found for this match.");
+          }
         }
+      } catch {
+        if (!cancelled) setReplayError("Network error. Please try again.");
+      } finally {
+        if (!cancelled) setLoadingReplay(false);
       }
-    } catch {
-      setReplayError("Network error. Please try again.");
-    } finally {
-      setLoadingReplay(false);
     }
-  }
+    fetchGlyphTimestamps();
+    return () => { cancelled = true; };
+  }, [match.matchId]);
 
   return (
     <div>
@@ -89,9 +96,8 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         glyphEvents={glyphEvents}
         players={match.players}
         heroes={heroes}
-        loadingReplay={loadingReplay}
-        replayError={replayError}
-        onLoadGlyphTimestamps={handleLoadGlyphTimestamps}
+        loadingGlyphs={loadingReplay}
+        glyphError={replayError}
       />
 
       {/* Team sections */}

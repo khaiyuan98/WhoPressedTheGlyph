@@ -11,9 +11,8 @@ interface TowerTimelineProps {
   glyphEvents: GlyphEvent[];
   players: PlayerGlyphData[];
   heroes: Record<number, HeroData>;
-  loadingReplay: boolean;
-  replayError: string | null;
-  onLoadGlyphTimestamps: () => void;
+  loadingGlyphs: boolean;
+  glyphError: string | null;
 }
 
 type TimelineEntry =
@@ -25,9 +24,8 @@ export default function TowerTimeline({
   glyphEvents,
   players,
   heroes,
-  loadingReplay,
-  replayError,
-  onLoadGlyphTimestamps,
+  loadingGlyphs,
+  glyphError,
 }: TowerTimelineProps) {
   const glyphUsers = players.filter((p) => p.glyphUses > 0);
   const radiantGlyphUsers = glyphUsers.filter((p) => p.isRadiant);
@@ -77,24 +75,13 @@ export default function TowerTimeline({
       </div>
 
       {/* Load Glyph Timestamps button */}
-      {!hasGlyphTimestamps && (
-        <div className="mb-4 text-center">
-          <button
-            onClick={onLoadGlyphTimestamps}
-            disabled={loadingReplay}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
-          >
-            {loadingReplay
-              ? "Loading glyph timestamps..."
-              : "Load Glyph Timestamps"}
-          </button>
-          {replayError && (
-            <p className="mt-2 text-sm text-red-400">{replayError}</p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            Fetches exact glyph usage times from STRATZ
-          </p>
-        </div>
+      {loadingGlyphs && (
+        <p className="mb-4 text-sm text-amber-400 text-center animate-pulse">
+          Loading glyph timestamps...
+        </p>
+      )}
+      {glyphError && !loadingGlyphs && (
+        <p className="mb-4 text-sm text-red-400 text-center">{glyphError}</p>
       )}
 
       {/* Timeline */}
