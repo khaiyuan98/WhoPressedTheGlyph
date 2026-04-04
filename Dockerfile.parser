@@ -1,2 +1,2 @@
 FROM odota/parser
-CMD java -jar /usr/src/parser/target/stats-0.1.0.jar ${PORT:-8080}
+CMD java -Xmx1536m -jar /usr/src/parser/target/stats-0.1.0.jar ${PORT:-8080}
