@@ -260,6 +260,22 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
 async function processJob(matchId: number): Promise<void> {
   console.log(`[${new Date().toISOString()}] Processing match ${matchId}...`);
 
+  // Check if this match already has valid glyph data (e.g., from STRATZ)
+  const { data: existing } = await supabase
+    .from("glyph_events")
+    .select("glyph_data")
+    .eq("match_id", matchId)
+    .single();
+
+  if (existing?.glyph_data && Array.isArray(existing.glyph_data) && existing.glyph_data.length > 0) {
+    console.log(`  Match already has ${existing.glyph_data.length} glyph events from cache. Marking as completed.`);
+    await supabase
+      .from("glyph_events")
+      .update({ status: "completed", error: null, updated_at: new Date().toISOString() })
+      .eq("match_id", matchId);
+    return;
+  }
+
   // Mark as parsing
   await supabase
     .from("glyph_events")

@@ -26,8 +26,9 @@ export async function GET(
   const cached = await getCachedGlyphEvents(matchId);
 
   if (cached) {
-    if (cached.status === "completed" && cached.glyph_data && cached.glyph_data.length > 0) {
-      // Only serve from cache if there are actual glyph events
+    if (cached.glyph_data && cached.glyph_data.length > 0) {
+      // Serve valid glyph data regardless of status — handles STRATZ data
+      // surviving a parser worker failure (worker sets "failed" but doesn't clear glyph_data)
       return NextResponse.json({
         glyphEvents: cached.glyph_data,
         source: "cache",
