@@ -101,6 +101,10 @@ export async function GET(
     0
   );
   if (totalGlyphs === 0) {
+    // Update Supabase if row is stuck at parse_requested (no glyphs = no parser work needed)
+    if (cached?.status === "parse_requested" || cached?.status === "failed") {
+      await saveGlyphEvents(matchId, [], "opendota");
+    }
     return NextResponse.json({
       glyphEvents: [],
       source: "opendota",
