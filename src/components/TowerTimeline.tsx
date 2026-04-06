@@ -13,6 +13,7 @@ interface TowerTimelineProps {
   heroes: Record<number, HeroData>;
   loadingGlyphs: boolean;
   glyphError: string | null;
+  glyphStatus: string | null;
 }
 
 type TimelineEntry =
@@ -26,6 +27,7 @@ export default function TowerTimeline({
   heroes,
   loadingGlyphs,
   glyphError,
+  glyphStatus,
 }: TowerTimelineProps) {
   const glyphUsers = players.filter((p) => p.glyphUses > 0);
   const radiantGlyphUsers = glyphUsers.filter((p) => p.isRadiant);
@@ -74,13 +76,20 @@ export default function TowerTimeline({
         />
       </div>
 
-      {/* Load Glyph Timestamps button */}
+      {/* Glyph loading status */}
       {loadingGlyphs && (
         <p className="mb-4 text-sm text-amber-400 text-center animate-pulse">
           Loading glyph timestamps...
         </p>
       )}
-      {glyphError && !loadingGlyphs && (
+      {!loadingGlyphs && (glyphStatus === "pending" || glyphStatus === "parsing") && (
+        <p className="mb-4 text-sm text-amber-400 text-center animate-pulse">
+          {glyphStatus === "pending"
+            ? "Waiting for replay parser to pick up this match..."
+            : "Parsing replay... this may take a few minutes"}
+        </p>
+      )}
+      {glyphError && !loadingGlyphs && glyphStatus !== "pending" && glyphStatus !== "parsing" && (
         <p className="mb-4 text-sm text-red-400 text-center">{glyphError}</p>
       )}
 

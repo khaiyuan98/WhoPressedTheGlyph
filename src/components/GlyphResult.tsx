@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { MatchGlyphResult, HeroData, GlyphEvent } from "@/lib/types";
 import MatchInfo from "./MatchInfo";
 import TowerTimeline from "./TowerTimeline";
@@ -15,8 +15,10 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   const [parsing, setParsing] = useState(false);
   const [parseMsg, setParseMsg] = useState<string | null>(null);
   const [glyphEvents, setGlyphEvents] = useState<GlyphEvent[]>([]);
-  const [loadingReplay, setLoadingReplay] = useState(false);
-  const [replayError, setReplayError] = useState<string | null>(null);
+  const [loadingGlyphs, setLoadingGlyphs] = useState(false);
+  const [glyphError, setGlyphError] = useState<string | null>(null);
+  const [glyphStatus, setGlyphStatus] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const radiant = match.players.filter((p) => p.isRadiant);
   const dire = match.players.filter((p) => !p.isRadiant);
@@ -43,33 +45,79 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchGlyphTimestamps() {
-      setLoadingReplay(true);
-      setReplayError(null);
-      try {
-        const res = await fetch(`/api/stratz/${match.matchId}`);
-        if (cancelled) return;
-        const data = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setReplayError(data.error || "Failed to fetch glyph timestamps");
-        } else {
-          setGlyphEvents(data.glyphEvents ?? []);
-          if ((data.glyphEvents ?? []).length === 0) {
-            setReplayError("No glyph events found for this match.");
-          }
-        }
-      } catch {
-        if (!cancelled) setReplayError("Network error. Please try again.");
-      } finally {
-        if (!cancelled) setLoadingReplay(false);
+  const fetchGlyphs = useCallback(async (isPolling = false) => {
+    if (!isPolling) setLoadingGlyphs(true);
+    setGlyphError(null);
+    try {
+      const res = await fetch(`/api/glyph/${match.matchId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setGlyphError(data.error || "Failed to fetch glyph timestamps");
+        setGlyphStatus("failed");
+        return;
       }
+
+      setGlyphStatus(data.status);
+
+      if (data.status === "completed") {
+        setGlyphEvents(data.glyphEvents ?? []);
+        // Stop polling
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        if ((data.glyphEvents ?? []).length === 0 && data.error) {
+          setGlyphError(data.error);
+        } else if ((data.glyphEvents ?? []).length === 0) {
+          setGlyphError("No glyph events found for this match.");
+        }
+      } else if (data.status === "failed") {
+        setGlyphError(data.error || "Replay parsing failed.");
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      }
+      // If pending/parsing, keep polling
+    } catch {
+      setGlyphError("Network error. Please try again.");
+    } finally {
+      if (!isPolling) setLoadingGlyphs(false);
     }
-    fetchGlyphTimestamps();
-    return () => { cancelled = true; };
   }, [match.matchId]);
+
+  useEffect(() => {
+    fetchGlyphs(false).then(() => {
+      // If status is pending/parsing, start polling every 5 seconds
+    });
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [fetchGlyphs]);
+
+  // Start/stop polling based on status
+  useEffect(() => {
+    if (
+      (glyphStatus === "pending" || glyphStatus === "parsing") &&
+      !pollRef.current
+    ) {
+      pollRef.current = setInterval(() => fetchGlyphs(true), 5000);
+    }
+    return () => {
+      if (
+        glyphStatus !== "pending" &&
+        glyphStatus !== "parsing" &&
+        pollRef.current
+      ) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [glyphStatus, fetchGlyphs]);
 
   return (
     <div>
@@ -96,8 +144,9 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         glyphEvents={glyphEvents}
         players={match.players}
         heroes={heroes}
-        loadingGlyphs={loadingReplay}
-        glyphError={replayError}
+        loadingGlyphs={loadingGlyphs}
+        glyphError={glyphError}
+        glyphStatus={glyphStatus}
       />
 
       {/* Team sections */}

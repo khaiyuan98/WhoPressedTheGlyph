@@ -1,3 +1,3 @@
 FROM odota/parser
-ENTRYPOINT []
-CMD ["sh", "-c", "echo Starting parser on port $PORT && java -Xmx1536m -jar /usr/src/parser/target/stats-0.1.0.jar ${PORT:-8080} 2>&1"]
+ENV PORT=8080
+CMD ["sh", "-c", "java -Xmx1536m -jar /usr/src/parser/target/stats-0.1.0.jar $PORT"]
