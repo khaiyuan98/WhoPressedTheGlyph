@@ -28,11 +28,8 @@ export default function RootLayout({
             gtag('config', 'G-ZNHZZFTQK5');
           `}
         </Script>
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8484071240501962"
-          crossOrigin="anonymous"
-        />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8484071240501962"
+          crossOrigin="anonymous"></script>
       </head>
       <body className="bg-gray-950 text-gray-100 min-h-screen">
         <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>

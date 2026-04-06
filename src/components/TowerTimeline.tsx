@@ -82,14 +82,16 @@ export default function TowerTimeline({
           Loading glyph timestamps...
         </p>
       )}
-      {!loadingGlyphs && (glyphStatus === "pending" || glyphStatus === "parsing") && (
+      {!loadingGlyphs && (glyphStatus === "parse_requested" || glyphStatus === "pending" || glyphStatus === "parsing") && (
         <p className="mb-4 text-sm text-amber-400 text-center animate-pulse">
-          {glyphStatus === "pending"
-            ? "Waiting for replay parser to pick up this match..."
-            : "Parsing replay... this may take a few minutes"}
+          {glyphStatus === "parse_requested"
+            ? "Parse requested — waiting for OpenDota to process the replay..."
+            : glyphStatus === "pending"
+              ? "Waiting for replay parser to pick up this match..."
+              : "Parsing replay... this may take a few minutes"}
         </p>
       )}
-      {glyphError && !loadingGlyphs && glyphStatus !== "pending" && glyphStatus !== "parsing" && (
+      {glyphError && !loadingGlyphs && glyphStatus !== "parse_requested" && glyphStatus !== "pending" && glyphStatus !== "parsing" && (
         <p className={`mb-4 text-sm text-center ${glyphStatus === "no_replay" ? "text-amber-400" : "text-red-400"}`}>
           {glyphError}
         </p>

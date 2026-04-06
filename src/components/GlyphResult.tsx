@@ -127,10 +127,16 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         <div className="mb-6 text-center">
           <button
             onClick={handleRequestParse}
-            disabled={parsing}
+            disabled={parsing || glyphStatus === "parse_requested" || glyphStatus === "pending" || glyphStatus === "parsing"}
             className="px-6 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
-            {parsing ? "Requesting..." : "Request Parse"}
+            {parsing
+              ? "Requesting..."
+              : glyphStatus === "parse_requested"
+                ? "Parse Requested — Waiting for OpenDota"
+                : glyphStatus === "pending" || glyphStatus === "parsing"
+                  ? "Parse in Progress..."
+                  : "Request Parse"}
           </button>
           {parseMsg && (
             <p className="mt-2 text-sm text-amber-300">{parseMsg}</p>

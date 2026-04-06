@@ -10,7 +10,7 @@ export const supabase = supabaseUrl && supabaseKey
 
 export interface GlyphJobRow {
   match_id: number;
-  status: "pending" | "parsing" | "completed" | "failed";
+  status: "parse_requested" | "pending" | "parsing" | "completed" | "failed";
   glyph_data: GlyphEvent[] | null;
   error: string | null;
   created_at: string;

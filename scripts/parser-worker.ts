@@ -46,6 +46,7 @@ interface MatchPlayer {
 
 interface MatchData {
   replay_url: string | null;
+  version: number | null;
   players: MatchPlayer[];
 }
 
@@ -55,6 +56,7 @@ async function getMatchData(matchId: number): Promise<MatchData | null> {
   const data = await res.json();
   return {
     replay_url: data.replay_url || null,
+    version: data.version ?? null,
     players: (data.players || []).map((p: { hero_id: number; player_slot: number; isRadiant: boolean; actions?: Record<string, number> }) => ({
       hero_id: p.hero_id,
       player_slot: p.player_slot,
@@ -234,8 +236,16 @@ async function processJob(matchId: number): Promise<void> {
       throw new Error("No replay URL available (replay may have expired or match needs to be parsed on OpenDota first)");
     }
 
-    // Check if anyone actually used glyph
+    // Check if OpenDota has finished parsing (version !== null means parsed)
     const totalGlyphs = matchData.players.reduce((sum, p) => sum + p.glyphUses, 0);
+    const isParsed = matchData.version !== null && matchData.version !== undefined;
+
+    if (!isParsed) {
+      // OpenDota hasn't parsed this match yet — glyph counts are unreliable
+      // Mark as failed so it can be retried later
+      throw new Error("Match not yet parsed by OpenDota. Retry after parsing completes.");
+    }
+
     if (totalGlyphs === 0) {
       console.log(`  No glyph usage detected in this match. Saving empty result.`);
       await supabase
@@ -260,6 +270,12 @@ async function processJob(matchId: number): Promise<void> {
     const glyphEvents = await parseReplay(matchData.replay_url, matchData.players);
 
     console.log(`  Found ${glyphEvents.length} glyph events`);
+
+    // If parser found 0 events but OpenDota says there are glyphs, something is wrong
+    // Mark as failed so it can be retried
+    if (glyphEvents.length === 0 && totalGlyphs > 0) {
+      throw new Error(`Parser found 0 glyph events but OpenDota reports ${totalGlyphs} glyph uses. Replay may not be fully available yet.`);
+    }
 
     // Write results
     await supabase

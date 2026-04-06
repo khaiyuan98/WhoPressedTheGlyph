@@ -26,21 +26,22 @@ export async function GET(
   const cached = await getCachedGlyphEvents(matchId);
 
   if (cached) {
-    if (cached.status === "completed" && cached.glyph_data) {
+    if (cached.status === "completed" && cached.glyph_data && cached.glyph_data.length > 0) {
+      // Only serve from cache if there are actual glyph events
       return NextResponse.json({
         glyphEvents: cached.glyph_data,
         source: "cache",
         status: "completed",
       });
     }
-    if (cached.status === "pending" || cached.status === "parsing") {
+    if (cached.status === "pending" || cached.status === "parsing" || cached.status === "parse_requested") {
       return NextResponse.json({
         glyphEvents: [],
         source: "parser",
         status: cached.status,
       });
     }
-    // If failed, continue to try STRATZ (data may be available now)
+    // If failed or completed with empty data, continue to try STRATZ (data may be available now)
   }
 
   // 2. Try STRATZ
