@@ -65,23 +65,43 @@ export async function GET(
     // STRATZ failed, continue to fallback
   }
 
-  // 3. No cache and no STRATZ data — check if replay exists before creating parse job
+  // 3. No cache and no STRATZ data — check if match is parsed and replay exists
+  let matchData;
   try {
-    const match = await getMatch(id);
-    if (!match.replay_url) {
-      return NextResponse.json({
-        glyphEvents: [],
-        source: "none",
-        status: "no_replay",
-        error: "No replay available. Click 'Request Parse' to parse the match on OpenDota first, then refresh.",
-      });
-    }
+    matchData = await getMatch(id);
   } catch {
     return NextResponse.json({
       glyphEvents: [],
       source: "none",
       status: "error",
-      error: "Could not check replay availability.",
+      error: "Could not fetch match data from OpenDota.",
+    });
+  }
+
+  const isParsed = matchData.version !== null && matchData.version !== undefined;
+
+  if (!isParsed || !matchData.replay_url) {
+    return NextResponse.json({
+      glyphEvents: [],
+      source: "none",
+      status: "no_replay",
+      error: !isParsed
+        ? "Match not yet parsed by OpenDota. Click 'Request Parse' and wait a few minutes, then refresh."
+        : "No replay available. Click 'Request Parse' to parse the match on OpenDota first, then refresh.",
+    });
+  }
+
+  // Check if anyone actually used glyph (avoid unnecessary parser jobs)
+  const totalGlyphs = matchData.players.reduce(
+    (sum: number, p: { actions?: Record<string, number> }) => sum + (p.actions?.["24"] ?? 0),
+    0
+  );
+  if (totalGlyphs === 0) {
+    return NextResponse.json({
+      glyphEvents: [],
+      source: "opendota",
+      status: "completed",
+      error: "No glyph usage detected in this match.",
     });
   }
 
