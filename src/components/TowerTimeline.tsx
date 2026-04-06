@@ -33,6 +33,10 @@ export default function TowerTimeline({
   const radiantGlyphUsers = glyphUsers.filter((p) => p.isRadiant);
   const direGlyphUsers = glyphUsers.filter((p) => !p.isRadiant);
 
+  // Fallback team totals from STRATZ events when OpenDota per-player data is unavailable
+  const radiantGlyphCountFromEvents = glyphEvents.filter((e) => e.isRadiant === true).length;
+  const direGlyphCountFromEvents = glyphEvents.filter((e) => e.isRadiant === false).length;
+
   // Build lookups
   const heroByName: Record<string, HeroData> = {};
   const playerBySlot: Record<number, PlayerGlyphData> = {};
@@ -68,11 +72,13 @@ export default function TowerTimeline({
           team="Radiant"
           users={radiantGlyphUsers}
           heroes={heroes}
+          glyphCountFromEvents={radiantGlyphCountFromEvents}
         />
         <GlyphUserList
           team="Dire"
           users={direGlyphUsers}
           heroes={heroes}
+          glyphCountFromEvents={direGlyphCountFromEvents}
         />
       </div>
 
@@ -83,13 +89,20 @@ export default function TowerTimeline({
         </p>
       )}
       {!loadingGlyphs && (glyphStatus === "parse_requested" || glyphStatus === "pending" || glyphStatus === "parsing") && (
-        <p className="mb-4 text-sm text-amber-400 text-center animate-pulse">
-          {glyphStatus === "parse_requested"
-            ? "Parse requested — waiting for OpenDota to process the replay..."
-            : glyphStatus === "pending"
-              ? "Waiting for replay parser to pick up this match..."
-              : "Parsing replay... this may take a few minutes"}
-        </p>
+        <div className="mb-4 text-center">
+          <p className="text-sm text-amber-400 animate-pulse">
+            {glyphStatus === "parse_requested"
+              ? "Waiting for OpenDota to finish parsing the replay..."
+              : glyphStatus === "pending"
+                ? "Replay parsed — queued for glyph extraction..."
+                : "Extracting glyph timestamps from replay..."}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {glyphStatus === "parse_requested"
+              ? "This page will automatically update when results are ready. No need to refresh."
+              : "This page will automatically update in a few moments."}
+          </p>
+        </div>
       )}
       {glyphError && !loadingGlyphs && glyphStatus !== "parse_requested" && glyphStatus !== "pending" && glyphStatus !== "parsing" && (
         <p className={`mb-4 text-sm text-center ${glyphStatus === "no_replay" ? "text-amber-400" : "text-red-400"}`}>
@@ -262,18 +275,29 @@ function GlyphUserList({
   team,
   users,
   heroes,
+  glyphCountFromEvents,
 }: {
   team: string;
   users: PlayerGlyphData[];
   heroes: Record<number, HeroData>;
+  glyphCountFromEvents: number;
 }) {
   const teamColor = team === "Radiant" ? "text-green-400" : "text-red-400";
 
   return (
     <div>
       <h4 className={`text-sm font-bold ${teamColor} mb-1.5`}>{team}</h4>
-      {users.length === 0 ? (
+      {users.length === 0 && glyphCountFromEvents === 0 ? (
         <p className="text-xs text-gray-500">No glyph usage</p>
+      ) : users.length === 0 ? (
+        <div className="bg-amber-900/20 border border-amber-700/30 rounded px-2 py-1.5">
+          <p className="text-xs text-amber-300">
+            {glyphCountFromEvents}× glyph used
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Request Parse for per-hero breakdown
+          </p>
+        </div>
       ) : (
         <div className="space-y-1.5">
           {users.map((u) => {

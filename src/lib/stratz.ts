@@ -75,7 +75,19 @@ export async function fetchStratzGlyphEvents(matchId: string): Promise<StratzGly
     return { glyphEvents: [], error: `STRATZ API returned status ${res.status}` };
   }
 
-  const data = await res.json();
+  // Read as text first — STRATZ sometimes returns plain-text error messages with HTTP 200
+  const text = await res.text();
+  if (!text.trimStart().startsWith("{") && !text.trimStart().startsWith("[")) {
+    if (text.includes("100 public games") || text.toLowerCase().includes("you must")) {
+      return {
+        glyphEvents: [],
+        error: "Player privacy restriction — one or more players in this match have a private profile. STRATZ cannot provide glyph data.",
+      };
+    }
+    return { glyphEvents: [], error: "STRATZ returned an unexpected response." };
+  }
+
+  const data = JSON.parse(text);
 
   if (data.errors) {
     return { glyphEvents: [], error: data.errors[0]?.message || "STRATZ GraphQL error" };

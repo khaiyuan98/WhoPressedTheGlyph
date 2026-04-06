@@ -11,6 +11,9 @@ interface GlyphResultProps {
   heroes: Record<number, HeroData>;
 }
 
+// Valve keeps replays for approximately 13 days
+const REPLAY_EXPIRY_DAYS = 13;
+
 export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   const [parsing, setParsing] = useState(false);
   const [parseMsg, setParseMsg] = useState<string | null>(null);
@@ -19,9 +22,14 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   const [glyphError, setGlyphError] = useState<string | null>(null);
   const [glyphStatus, setGlyphStatus] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollIntervalRef = useRef<number>(5000);
 
   const radiant = match.players.filter((p) => p.isRadiant);
   const dire = match.players.filter((p) => !p.isRadiant);
+
+  // Check if replay is likely expired (older than ~13 days)
+  const replayMayBeExpired =
+    (Date.now() / 1000 - match.startTime) > REPLAY_EXPIRY_DAYS * 24 * 3600;
 
   async function handleRequestParse() {
     setParsing(true);
@@ -62,6 +70,8 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
 
       if (data.status === "completed") {
         setGlyphEvents(data.glyphEvents ?? []);
+        // Clear the parse request message once we have a result
+        setParseMsg(null);
         // Stop polling
         if (pollRef.current) {
           clearInterval(pollRef.current);
@@ -79,7 +89,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
           pollRef.current = null;
         }
       }
-      // If pending/parsing, keep polling
+      // If pending/parsing/parse_requested, keep polling
     } catch {
       setGlyphError("Network error. Please try again.");
     } finally {
@@ -88,9 +98,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   }, [match.matchId]);
 
   useEffect(() => {
-    fetchGlyphs(false).then(() => {
-      // If status is pending/parsing, start polling every 5 seconds
-    });
+    fetchGlyphs(false);
 
     return () => {
       if (pollRef.current) {
@@ -100,21 +108,38 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
     };
   }, [fetchGlyphs]);
 
-  // Start/stop polling based on status
+  // Start/stop polling based on status.
+  // parse_requested polls every 15s (waiting on OpenDota, takes minutes).
+  // pending/parsing polls every 5s (Mac Mini is actively processing).
   useEffect(() => {
-    if (
-      (glyphStatus === "pending" || glyphStatus === "parsing" || glyphStatus === "parse_requested") &&
-      !pollRef.current
-    ) {
-      pollRef.current = setInterval(() => fetchGlyphs(true), 5000);
+    const isActive =
+      glyphStatus === "pending" ||
+      glyphStatus === "parsing" ||
+      glyphStatus === "parse_requested";
+
+    if (!isActive) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
     }
+
+    const interval = glyphStatus === "parse_requested" ? 15000 : 5000;
+
+    // Restart interval if the desired interval changed (e.g. parse_requested → pending)
+    if (pollRef.current && pollIntervalRef.current !== interval) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    if (!pollRef.current) {
+      pollIntervalRef.current = interval;
+      pollRef.current = setInterval(() => fetchGlyphs(true), interval);
+    }
+
     return () => {
-      if (
-        glyphStatus !== "pending" &&
-        glyphStatus !== "parsing" &&
-        glyphStatus !== "parse_requested" &&
-        pollRef.current
-      ) {
+      if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
@@ -127,9 +152,14 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
 
       {!match.isParsed && (
         <div className="mb-6 text-center">
+          {replayMayBeExpired && (
+            <p className="mb-3 text-sm text-orange-400">
+              ⚠ This match is over {REPLAY_EXPIRY_DAYS} days old — we may not be able to find out who pressed the Glyph as the match recording might no longer be available.
+            </p>
+          )}
           <button
             onClick={handleRequestParse}
-            disabled={parsing || glyphStatus === "parse_requested" || glyphStatus === "pending" || glyphStatus === "parsing"}
+            disabled={parsing}
             className="px-6 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
             {parsing
@@ -140,6 +170,9 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
                   ? "Parse in Progress..."
                   : "Request Parse"}
           </button>
+          <p className="mt-2 text-xs text-gray-500">
+            If parse doesn&apos;t complete after a few minutes, try clicking again.
+          </p>
           {parseMsg && (
             <p className="mt-2 text-sm text-amber-300">{parseMsg}</p>
           )}
