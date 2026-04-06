@@ -35,8 +35,9 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         setParseMsg(data.error || "Failed to request parse");
       } else {
         setParseMsg(
-          "Parse requested! This usually takes 1-5 minutes. Refresh the page to check for results."
+          "Parse requested! Waiting for OpenDota to finish parsing... results will auto-update."
         );
+        fetchGlyphs();
       }
     } catch {
       setParseMsg("Network error. Please try again.");
@@ -102,7 +103,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   // Start/stop polling based on status
   useEffect(() => {
     if (
-      (glyphStatus === "pending" || glyphStatus === "parsing") &&
+      (glyphStatus === "pending" || glyphStatus === "parsing" || glyphStatus === "parse_requested") &&
       !pollRef.current
     ) {
       pollRef.current = setInterval(() => fetchGlyphs(true), 5000);
@@ -111,6 +112,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
       if (
         glyphStatus !== "pending" &&
         glyphStatus !== "parsing" &&
+        glyphStatus !== "parse_requested" &&
         pollRef.current
       ) {
         clearInterval(pollRef.current);

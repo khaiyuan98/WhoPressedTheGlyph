@@ -37,7 +37,23 @@ export async function requestParse(matchId: number): Promise<GlyphJobRow | null>
 
   // Check if already exists
   const existing = await getCachedGlyphEvents(matchId);
-  if (existing) return existing;
+  if (existing) {
+    if (existing.status === "parse_requested") {
+      // Upgrade to pending if it was just a parse request
+      const { data, error } = await supabase
+        .from("glyph_events")
+        .update({
+          status: "pending",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("match_id", matchId)
+        .select()
+        .single();
+      if (error || !data) return null;
+      return data as GlyphJobRow;
+    }
+    return existing;
+  }
 
   // Insert new pending job
   const { data, error } = await supabase

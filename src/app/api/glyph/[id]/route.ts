@@ -34,12 +34,15 @@ export async function GET(
         status: "completed",
       });
     }
-    if (cached.status === "pending" || cached.status === "parsing" || cached.status === "parse_requested") {
+    if (cached.status === "pending" || cached.status === "parsing") {
       return NextResponse.json({
         glyphEvents: [],
         source: "parser",
         status: cached.status,
       });
+    }
+    if (cached.status === "parse_requested") {
+      // Continue to check STRATZ and OpenDota to see if it can transition to pending
     }
     // If failed or completed with empty data, continue to try STRATZ (data may be available now)
   }
@@ -81,10 +84,11 @@ export async function GET(
   const isParsed = matchData.version !== null && matchData.version !== undefined;
 
   if (!isParsed || !matchData.replay_url) {
+    const status = cached?.status === "parse_requested" ? "parse_requested" : "no_replay";
     return NextResponse.json({
       glyphEvents: [],
       source: "none",
-      status: "no_replay",
+      status: status,
       error: !isParsed
         ? "Match not yet parsed by OpenDota. Click 'Request Parse' and wait a few minutes, then refresh."
         : "No replay available. Click 'Request Parse' to parse the match on OpenDota first, then refresh.",
