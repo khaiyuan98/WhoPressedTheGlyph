@@ -5,6 +5,16 @@ import type {
   HeroData,
 } from "@/lib/types";
 import { formatDuration, getHeroImageUrl } from "@/lib/opendota";
+import { analyzeAllGlyphs, getTeamSummaries, type GlyphAnalysis, type TeamGlyphSummary } from "@/lib/glyphAnalysis";
+
+const TAG_TOOLTIPS: Record<string, string> = {
+  "Panic Glyph": "Glyph was used within 3 seconds of a building being destroyed — likely a panic reaction.",
+  "Clutch Save": "Buildings were actively falling, but nothing else was lost after the glyph — a clutch defensive play.",
+  "Free Glyph": "A tower or melee barracks fell during or just before this glyph, which resets the cooldown — so this glyph cost nothing.",
+  "Grief Glyph": "Glyph was used before the 5-minute mark with zero building activity — likely pressed by accident or for trolling.",
+  "High Stakes": "This glyph was used to protect barracks or the Ancient — the most critical buildings in the game.",
+  "Offensive Glyph": "Glyph was used while your team was pushing the enemy base — likely to protect your own buildings back home.",
+};
 
 interface TowerTimelineProps {
   buildingKills: BuildingKill[];
@@ -14,6 +24,7 @@ interface TowerTimelineProps {
   loadingGlyphs: boolean;
   glyphError: string | null;
   glyphStatus: string | null;
+  matchDuration: number;
 }
 
 type TimelineEntry =
@@ -28,6 +39,7 @@ export default function TowerTimeline({
   loadingGlyphs,
   glyphError,
   glyphStatus,
+  matchDuration,
 }: TowerTimelineProps) {
   const glyphUsers = players.filter((p) => p.glyphUses > 0);
   const radiantGlyphUsers = glyphUsers.filter((p) => p.isRadiant);
@@ -45,6 +57,20 @@ export default function TowerTimeline({
     const hero = heroes[p.heroId];
     if (hero) heroByName[hero.name] = hero;
   }
+
+  // Analyze glyph effectiveness
+  const glyphAnalyses = glyphEvents.length > 0 && buildingKills.length > 0
+    ? analyzeAllGlyphs(glyphEvents, buildingKills, matchDuration)
+    : [];
+  const analysisMap = new Map<number, GlyphAnalysis>();
+  for (const a of glyphAnalyses) {
+    analysisMap.set(a.glyphEvent.time, a);
+  }
+
+  // Team summaries
+  const teamSummaries = glyphAnalyses.length > 0
+    ? getTeamSummaries(glyphAnalyses)
+    : null;
 
   // Merge building kills and glyph events into a single sorted timeline
   const timeline: TimelineEntry[] = [
@@ -110,6 +136,14 @@ export default function TowerTimeline({
         </p>
       )}
 
+      {/* Team Glyph Efficiency Summary */}
+      {teamSummaries && (teamSummaries.radiant.total > 0 || teamSummaries.dire.total > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <EfficiencyCard summary={teamSummaries.radiant} />
+          <EfficiencyCard summary={teamSummaries.dire} />
+        </div>
+      )}
+
       {/* Timeline */}
       {timeline.length > 0 && (
         <>
@@ -133,6 +167,7 @@ export default function TowerTimeline({
                     event={entry.data}
                     player={entry.player}
                     heroes={heroes}
+                    analysis={analysisMap.get(entry.data.time)}
                   />
                 );
               }
@@ -202,10 +237,12 @@ function GlyphRow({
   event,
   player,
   heroes,
+  analysis,
 }: {
   event: GlyphEvent;
   player: PlayerGlyphData | undefined;
   heroes: Record<number, HeroData>;
+  analysis?: GlyphAnalysis;
 }) {
   // Use heroId from event (STRATZ attribution) or fall back to player data
   const heroId = event.heroId ?? player?.heroId;
@@ -240,33 +277,64 @@ function GlyphRow({
         ? "bg-red-900/20 border-red-700/30"
         : "bg-amber-900/30 border-amber-700/30";
 
+  // Analysis badge colors
+  const labelColors: Record<string, string> = {
+    "Effective": "bg-green-700/60 text-green-300",
+    "Possibly Effective": "bg-blue-700/50 text-blue-300",
+    "Questionable": "bg-amber-700/50 text-amber-300",
+    "Likely Wasted": "bg-red-700/50 text-red-300",
+  };
+
   return (
-    <div
-      className={`flex items-center gap-3 py-1.5 px-3 rounded border ${bgColor}`}
-    >
-      <span
-        className={`text-sm font-mono w-12 flex-shrink-0 ${teamColor}`}
-      >
-        {formatDuration(event.time)}
-      </span>
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-      <span className={`text-sm font-medium flex-1 ${teamColor}`}>
-        {teamLabel ? `${teamLabel} Glyph` : "Glyph used"}
-      </span>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        {heroImg && (
-          <img
-            src={heroImg}
-            alt={hero?.localized_name ?? ""}
-            className="w-8 h-[18px] rounded object-cover"
-          />
-        )}
-        {playerName && (
-          <span className={`text-xs hidden sm:inline ${teamColor}`}>
-            {playerName}
+    <div className={`rounded border ${bgColor}`}>
+      <div className="flex items-center gap-3 py-1.5 px-3">
+        <span
+          className={`text-sm font-mono w-12 flex-shrink-0 ${teamColor}`}
+        >
+          {formatDuration(event.time)}
+        </span>
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+        <span className={`text-sm font-medium ${teamColor}`}>
+          {teamLabel ? `${teamLabel} Glyph` : "Glyph used"}
+        </span>
+        {analysis && (
+          <span
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${labelColors[analysis.label] ?? "bg-gray-700 text-gray-300"}`}
+          >
+            {analysis.label}
           </span>
         )}
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          {heroImg && (
+            <img
+              src={heroImg}
+              alt={hero?.localized_name ?? ""}
+              className="w-8 h-[18px] rounded object-cover"
+            />
+          )}
+          {playerName && (
+            <span className={`text-xs hidden sm:inline ${teamColor}`}>
+              {playerName}
+            </span>
+          )}
+        </div>
       </div>
+      {analysis && (
+        <div className="px-3 pb-1.5 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] text-gray-400 italic ml-[68px]">
+            {analysis.reason}
+          </span>
+          {analysis.tags.map((tag) => (
+            <span
+              key={tag}
+              title={TAG_TOOLTIPS[tag] ?? ""}
+              className="text-[10px] bg-gray-700/60 text-gray-300 px-1.5 py-0.5 rounded cursor-help"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -300,6 +368,11 @@ function GlyphUserList({
         </div>
       ) : (
         <div className="space-y-1.5">
+          <div className="bg-amber-900/20 border border-amber-700/30 rounded px-2 py-1.5 mb-1">
+            <p className="text-xs text-amber-300">
+              {users.reduce((sum, u) => sum + u.glyphUses, 0)}× glyph used
+            </p>
+          </div>
           {users.map((u) => {
             const hero = heroes[u.heroId];
             const heroImg = hero ? getHeroImageUrl(hero.name) : null;
@@ -326,6 +399,40 @@ function GlyphUserList({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function EfficiencyCard({ summary }: { summary: TeamGlyphSummary }) {
+  if (summary.total === 0) return null;
+
+  const teamColor = summary.team === "radiant" ? "text-green-400" : "text-red-400";
+  const teamLabel = summary.team === "radiant" ? "Radiant" : "Dire";
+  const pct = summary.effectivenessPercent;
+  const barColor =
+    pct >= 60 ? "bg-green-500" : pct >= 30 ? "bg-amber-500" : "bg-red-500";
+
+  return (
+    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className={`text-xs font-bold ${teamColor}`}>
+          {teamLabel} Glyph Efficiency
+        </span>
+        <span className="text-xs text-gray-300 font-semibold">
+          {summary.effective}/{summary.total} ({pct}%)
+        </span>
+      </div>
+      <div className="w-full bg-gray-700 rounded-full h-1.5">
+        <div
+          className={`h-1.5 rounded-full ${barColor} transition-all`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex gap-3 mt-1.5 text-[10px] text-gray-500">
+        <span>{summary.effective} effective</span>
+        {summary.questionable > 0 && <span>{summary.questionable} questionable</span>}
+        {summary.wasted > 0 && <span>{summary.wasted} wasted</span>}
+      </div>
     </div>
   );
 }

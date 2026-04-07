@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { MatchGlyphResult, HeroData, GlyphEvent } from "@/lib/types";
+import type { MatchGlyphResult, HeroData, GlyphEvent, BuildingKill } from "@/lib/types";
 import MatchInfo from "./MatchInfo";
 import TowerTimeline from "./TowerTimeline";
 import PlayerCard from "./PlayerCard";
@@ -18,14 +18,19 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
   const [parsing, setParsing] = useState(false);
   const [parseMsg, setParseMsg] = useState<string | null>(null);
   const [glyphEvents, setGlyphEvents] = useState<GlyphEvent[]>([]);
+  const [buildingKills, setBuildingKills] = useState<BuildingKill[]>(match.buildingKills);
+  const [players, setPlayers] = useState(match.players);
+  const [isParsed, setIsParsed] = useState(match.isParsed);
   const [loadingGlyphs, setLoadingGlyphs] = useState(false);
   const [glyphError, setGlyphError] = useState<string | null>(null);
   const [glyphStatus, setGlyphStatus] = useState<string | null>(null);
+  const [parseRequested, setParseRequested] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollIntervalRef = useRef<number>(5000);
+  const matchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const radiant = match.players.filter((p) => p.isRadiant);
-  const dire = match.players.filter((p) => !p.isRadiant);
+  const radiant = players.filter((p) => p.isRadiant);
+  const dire = players.filter((p) => !p.isRadiant);
 
   // Check if replay is likely expired (older than ~13 days)
   const replayMayBeExpired =
@@ -45,7 +50,10 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         setParseMsg(
           "Parse requested! Waiting for OpenDota to finish parsing... results will auto-update."
         );
-        fetchGlyphs();
+        // Track parse request separately from glyph status.
+        // Don't set glyphStatus here — if STRATZ already cached glyph data,
+        // glyph polling would return "completed" and reset the button/messages.
+        setParseRequested(true);
       }
     } catch {
       setParseMsg("Network error. Please try again.");
@@ -69,18 +77,37 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
       setGlyphStatus(data.status);
 
       if (data.status === "completed") {
-        setGlyphEvents(data.glyphEvents ?? []);
-        // Clear the parse request message once we have a result
-        setParseMsg(null);
+        const events = data.glyphEvents ?? [];
+        setGlyphEvents(events);
         // Stop polling
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
-        if ((data.glyphEvents ?? []).length === 0 && data.error) {
+        if (events.length === 0 && data.error) {
           setGlyphError(data.error);
-        } else if ((data.glyphEvents ?? []).length === 0) {
+        } else if (events.length === 0) {
           setGlyphError("No glyph events found for this match.");
+        }
+        // Re-fetch building kills if we have glyph data but no building kills
+        // (happens when STRATZ returns data before OpenDota has parsed)
+        if (events.length > 0) {
+          setBuildingKills((prev) => {
+            if (prev.length === 0) {
+              fetch(`/api/matches/${match.matchId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.match?.buildingKills?.length > 0) {
+                    setBuildingKills(d.match.buildingKills);
+                  }
+                  if (d.match?.isParsed) {
+                    setIsParsed(true);
+                  }
+                })
+                .catch(() => {});
+            }
+            return prev;
+          });
         }
       } else if (data.status === "failed" || data.status === "no_replay" || data.status === "error") {
         setGlyphError(data.error || "Replay parsing failed.");
@@ -146,11 +173,68 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
     };
   }, [glyphStatus, fetchGlyphs]);
 
+  // Clear parse message and request state when match becomes parsed
+  useEffect(() => {
+    if (isParsed) {
+      setParseMsg(null);
+      setParseRequested(false);
+    }
+  }, [isParsed]);
+
+  // Poll match data from OpenDota when waiting for parse to complete.
+  // Detects when OpenDota finishes parsing and auto-updates player stats,
+  // building kills, and isParsed — so the user doesn't need to refresh.
+  useEffect(() => {
+    const shouldPoll =
+      !isParsed &&
+      (parseRequested ||
+        glyphStatus === "pending" ||
+        glyphStatus === "parsing");
+
+    if (!shouldPoll) {
+      if (matchPollRef.current) {
+        clearInterval(matchPollRef.current);
+        matchPollRef.current = null;
+      }
+      return;
+    }
+
+    if (!matchPollRef.current) {
+      matchPollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/matches/${match.matchId}`);
+          const d = await res.json();
+          if (d.match?.isParsed) {
+            setIsParsed(true);
+            setPlayers(d.match.players);
+            if (d.match.buildingKills?.length > 0) {
+              setBuildingKills(d.match.buildingKills);
+            }
+            // Stop polling — match is parsed
+            if (matchPollRef.current) {
+              clearInterval(matchPollRef.current);
+              matchPollRef.current = null;
+            }
+          }
+        } catch {
+          // Ignore errors, will retry on next interval
+        }
+      }, 15000);
+    }
+
+    return () => {
+      if (matchPollRef.current) {
+        clearInterval(matchPollRef.current);
+        matchPollRef.current = null;
+      }
+    };
+  }, [isParsed, parseRequested, glyphStatus, match.matchId]);
+
   return (
     <div>
-      <MatchInfo match={match} />
+      <MatchInfo match={match} isParsed={isParsed} />
 
-      {!match.isParsed && (
+      {!isParsed && (
         <div className="mb-6 text-center">
           {replayMayBeExpired && (
             <p className="mb-3 text-sm text-orange-400">
@@ -164,7 +248,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
           >
             {parsing
               ? "Requesting..."
-              : glyphStatus === "parse_requested"
+              : parseRequested
                 ? "Parse Requested — Waiting for OpenDota"
                 : glyphStatus === "pending" || glyphStatus === "parsing"
                   ? "Parse in Progress..."
@@ -181,13 +265,14 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
 
       {/* Tower Timeline & Glyph Users */}
       <TowerTimeline
-        buildingKills={match.buildingKills}
+        buildingKills={buildingKills}
         glyphEvents={glyphEvents}
-        players={match.players}
+        players={players}
         heroes={heroes}
         loadingGlyphs={loadingGlyphs}
         glyphError={glyphError}
         glyphStatus={glyphStatus}
+        matchDuration={match.duration}
       />
 
       {/* Team sections */}
@@ -196,14 +281,14 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
           teamName="Radiant"
           players={radiant}
           heroes={heroes}
-          isParsed={match.isParsed}
+          isParsed={isParsed}
           isWinner={match.radiantWin}
         />
         <TeamSection
           teamName="Dire"
           players={dire}
           heroes={heroes}
-          isParsed={match.isParsed}
+          isParsed={isParsed}
           isWinner={!match.radiantWin}
         />
       </div>

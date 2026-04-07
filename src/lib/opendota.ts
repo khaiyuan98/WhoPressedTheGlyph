@@ -80,6 +80,7 @@ const BUILDING_NAMES: Record<string, string> = {
   tower1: "T1",
   tower2: "T2",
   tower3: "T3",
+  tower4: "T4",
   melee_rax: "Melee Rax",
   range_rax: "Range Rax",
   fort: "Ancient",

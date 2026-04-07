@@ -3,6 +3,7 @@ import { formatDuration } from "@/lib/opendota";
 
 interface MatchInfoProps {
   match: MatchGlyphResult;
+  isParsed?: boolean;
 }
 
 function formatDate(timestamp: number): string {
@@ -15,7 +16,8 @@ function formatDate(timestamp: number): string {
   return `${year}-${month}-${day} ${hours}:${mins} UTC`;
 }
 
-export default function MatchInfo({ match }: MatchInfoProps) {
+export default function MatchInfo({ match, isParsed }: MatchInfoProps) {
+  const showUnparsedBanner = isParsed !== undefined ? !isParsed : !match.isParsed;
   return (
     <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -42,10 +44,10 @@ export default function MatchInfo({ match }: MatchInfoProps) {
           </div>
         </div>
       </div>
-      {!match.isParsed && (
+      {showUnparsedBanner && (
         <div className="mt-3 p-2 bg-yellow-900/30 border border-yellow-700/50 rounded text-yellow-300 text-sm">
-          This match has not been parsed yet. Glyph data is only available for
-          parsed matches. Click &quot;Request Parse&quot; below to parse it
+          This match has not been parsed yet. Player stats and per-hero glyph
+          attribution are unavailable. Click &quot;Request Parse&quot; below
           (replay must still be available on Valve servers, typically within ~2
           weeks of the match).
         </div>
