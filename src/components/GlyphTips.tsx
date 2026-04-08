@@ -15,7 +15,7 @@ const tips = [
     icon: "🔄",
     title: "Cooldown Resets on Tower Loss",
     description:
-      "Every time a Tier 1, Tier 2, or Tier 3 tower (or melee barracks) is destroyed, your Glyph cooldown fully resets — giving you a fresh Glyph at each stage of the game.",
+      "The first time a Tier 1, Tier 2, or melee barracks is destroyed, your Glyph cooldown fully resets — giving you a fresh Glyph at each stage of the game.",
   },
   {
     icon: "🏠",
